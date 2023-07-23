@@ -1,9 +1,10 @@
+#include <math.h>
 #include <errno.h>
 #include <string.h>
 #include <GL/glew.h>
-#include <stdbool.h>
 #include <SDL2/SDL.h>
 #include "cglm/struct.h"
+#include "keyboard.h"
 #include "texture.h"
 #include "shader.h"
 #include "common.h"
@@ -35,12 +36,8 @@ int main(void) {
 	TEST((glew = glewInit()) == GLEW_OK,
 		"glew init failed: %s", glewGetErrorString(glew));
 
-	bool vsync = true;
-
-	if (SDL_GL_SetSwapInterval(1) && SDL_GL_SetSwapInterval(-1)) {
+	if (SDL_GL_SetSwapInterval(1) && SDL_GL_SetSwapInterval(-1))
 		LOG("warning: vsync not supported!");
-		vsync = false;
-	}
 
 	GLuint program = glCreateProgram();
 
@@ -139,7 +136,7 @@ int main(void) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	if (!load_texture_2d("textures/cube.png"))
+	if (!load_texture_2d("textures/diamond.jpg"))
 		LOG("warning: can't load texture: %s", strerror(errno));
 
 	// setup depth test
@@ -174,7 +171,10 @@ int main(void) {
 		v = glGetUniformLocation(program, "v"),
 		p = glGetUniformLocation(program, "p");
 
-	float r = 0;
+	SDL_bool relative = SDL_FALSE;
+	float yaw = 3.14 / 2, pitch = 0;
+
+	key_init();
 
 	for (Uint64 lastTime = 0;;) {
 
@@ -198,22 +198,37 @@ int main(void) {
 			*mat
 		);
 
+		// Now, setup objects of the scene
 		Uint64 curTime = SDL_GetTicks64();
 
 		if (!lastTime)
 			lastTime = curTime;
 
-#define PRESSED(k) kb[SDL_SCANCODE_##k]
-#define DIR(a, b) (PRESSED(a) - PRESSED(b))
-
 		float dt = (curTime - lastTime) / 1000.f;
 		lastTime = curTime;
 
-		Uint8 const *kb = SDL_GetKeyboardState(0);
+#define DIR(a, b) (key_pressed(KEY(a)) - key_pressed(KEY(b)))
+#define SPEED 10
 
-		cam.pos.x += DIR(A, D) * dt * 5;
-		cam.pos.y += DIR(SPACE, LSHIFT) * dt * 5;
-		cam.pos.z += DIR(W, S) * dt * 5;
+		if (key_once_pressed(KEY(F)))
+			SDL_SetRelativeMouseMode(relative ^= SDL_TRUE);
+
+		if (relative) {
+			int xrel, yrel;
+
+			SDL_GetRelativeMouseState(&xrel, &yrel);
+
+			yaw += xrel / 10. * dt;
+			pitch += yrel / -10. * dt;
+		}
+
+		cam.dir.x = cosf(yaw) * cosf(pitch);
+		cam.dir.y = sinf(pitch);
+		cam.dir.z = sinf(yaw) * cosf(pitch);
+
+		cam.pos.x += DIR(A, D) * dt * SPEED;
+		cam.pos.y += DIR(SPACE, LSHIFT) * dt * SPEED;
+		cam.pos.z += DIR(W, S) * dt * SPEED;
 
 		glm_look(cam.pos.raw, cam.dir.raw, cam.up.raw, mat);
 
@@ -222,30 +237,36 @@ int main(void) {
 			1,
 			GL_FALSE,
 			*mat
-		);
-
-		glm_rotate_make(mat, r += dt, (vec3) {1, 1});
-
-		glUniformMatrix4fv(
-			m,
-			1,
-			GL_FALSE,
-			*mat
-		);		
+		);	
 
 		glClearColor(.2, .2, .2, 1);
 		glClear(GL_COLOR_BUFFER_BIT |
 			GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, w, h);
 
-		glDrawElements(GL_TRIANGLES, sizeof indices /
-			sizeof *indices, GL_UNSIGNED_BYTE, 0);
+#define W 20
+#define H 10
+
+		vec3 tmp = {[2] = 0};
+
+		for (int i = 0; i < H; i++) {
+			tmp[1] = (H - i - 1) * 2;
+			for (int j = 0; j < W; j++) {
+				*tmp = (W / -2 + j) * 2;
+				glm_translate_make(mat, tmp);
+				glUniformMatrix4fv(
+					m,
+					1,
+					GL_FALSE,
+					*mat
+				);
+				glDrawElements(GL_TRIANGLES,
+					sizeof indices / sizeof *indices,
+						GL_UNSIGNED_BYTE, 0);
+			}
+		}
 
 		SDL_GL_SwapWindow(window);
-
-		// Well, no vsync. We gotta wait :/
-		if (!vsync)
-			SDL_Delay(10);
 
 	}
 
