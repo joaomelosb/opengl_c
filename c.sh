@@ -1,1 +1,1 @@
-gcc $@ -Wall -Wextra -pedantic-errors -lSDL2 -lglew32 -lopengl32 -L.
+gcc $@ -Wall -Wextra -pedantic-errors -lSDL2 -lGLEW -lGL

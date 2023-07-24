@@ -8,6 +8,7 @@
 #include "texture.h"
 #include "shader.h"
 #include "common.h"
+#include "math.h"
 #include "log.h"
 
 static SDL_Window *window;
@@ -136,7 +137,7 @@ int main(void) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	if (!load_texture_2d("textures/diamond.jpg"))
+	if (!load_texture_2d("textures/stone.png"))
 		LOG("warning: can't load texture: %s", strerror(errno));
 
 	// setup depth test
@@ -173,6 +174,7 @@ int main(void) {
 
 	SDL_bool relative = SDL_FALSE;
 	float yaw = 3.14 / 2, pitch = 0;
+	int bh = 1;
 
 	key_init();
 
@@ -181,8 +183,14 @@ int main(void) {
 		SDL_Event e;
 
 		while (SDL_PollEvent(&e))
-			if (e.type == SDL_QUIT)
+			switch (e.type) {
+			case SDL_QUIT:
 				return 0;
+			case SDL_MOUSEWHEEL:
+				bh += SIGN(e.wheel.y);
+				if (bh < 1)
+					bh = 1;
+			}
 
 		int w, h;
 
@@ -244,15 +252,15 @@ int main(void) {
 			GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, w, h);
 
-#define W 20
-#define H 10
+#define W 10
+// #define H 10
 
 		vec3 tmp = {[2] = 0};
 
-		for (int i = 0; i < H; i++) {
-			tmp[1] = (H - i - 1) * 2;
-			for (int j = 0; j < W; j++) {
-				*tmp = (W / -2 + j) * 2;
+		for (int i = 0; i < bh; i++) {
+			tmp[1] = i * 2;
+			for (int j = 0; j < (!i || bh - i > W ? W : bh - i); j++) {
+				*tmp = ((W / 2) - j) * 2;
 				glm_translate_make(mat, tmp);
 				glUniformMatrix4fv(
 					m,
